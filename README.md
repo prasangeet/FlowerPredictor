@@ -162,7 +162,7 @@ The `data/flower_data/` directory contains:
 
 ## Model Information
 
-- **Architecture**: Fine-tuned ResNet-50
+- **Architecture**: Fine-tuned ResNet-18
 - **Accuracy**: ~92% on validation set
 - **Input**: 224x224 RGB images
 - **Output**: Softmax probabilities for flower classes
