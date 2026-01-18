@@ -43,7 +43,7 @@ flower-classification/
 │   ├── app/                     # Next.js pages
 │   ├── components/              # React components
 │   └── public/                  # Static assets
-└── README.md
+└── README.md2
 ```
 
 ---

@@ -1,2 +1,65 @@
 .venv
 data
+
+### General Python ignores
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.log
+*.sqlite3
+
+# OS specific
+.DS_Store
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+
+# Django specific
+**/migrations/
+**/__pycache__/
+db.sqlite3
+*.pot
+*.pyc
+
+# Jupyter notebook
+.ipynb_checkpoints/
+
+# Code coverage
+coverage/
+htmlcov/
+.tox/
+
+### Frontend specific ignores
+# Node_modules
+dist/
+node_modules/
+
+# Next.js specific
+.next/
+out/
+
+# TypeScript output
+*.tsbuildinfo
+next-env.d.ts
+
+# Misc
+/vercel
+
+### Debug log ignores
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+
+### ML aritifacts
+ml_pipeline/models/
+ml_pipeline/outputs/

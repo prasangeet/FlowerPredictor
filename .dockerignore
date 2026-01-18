@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Git
+.git/
+.gitignore
+
+# ML artifacts
+ml_pipeline/models/
+ml_pipeline/outputs/
+
+# Data (do NOT bake datasets into images)
+data/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+

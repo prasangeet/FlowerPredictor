@@ -1,0 +1,26 @@
+data:
+  root_dir: /data/flower_data
+  train_dir: train
+  val_dir: valid
+  test_dir: test
+
+preprocessing:
+  image_size: 224
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+training:
+  batch_size: 32
+  epochs: 10
+  learning_rate: 0.003
+  num_workers: 4
+  seed: 42
+
+model:
+  name: resnet18
+  pretrained: true
+  num_classes: 102
+
+artifacts:
+  model_dir: ml_pipeline/models
+  output_dir: ml_pipeline/outputs

@@ -1,0 +1,55 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flower-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - frontend/.env
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: flower-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+    volumes:
+      - ./ml_pipeline/models:/app/ml_pipeline/models
+      - ./data/flower_data:/data/flower_data
+      - /tmp/inference_uploads:/tmp/inference_uploads
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - inference
+    restart: unless-stopped
+
+  inference:
+    image: flower-inference
+    container_name: flower-inference
+
+    # ✅ Legacy NVIDIA GPU access (Fedora-safe)
+    devices:
+      - /dev/nvidia0
+      - /dev/nvidiactl
+      - /dev/nvidia-uvm
+
+    shm_size: "2gb"
+
+    volumes:
+      - ./ml_pipeline/models:/app/ml_pipeline/models
+      - ./data/flower_data:/data/flower_data
+      - /tmp/inference_uploads:/data/input
+
+    restart: unless-stopped
+
+    # Keep container alive
+    entrypoint: ["sleep"]
+    command: ["infinity"]
+
