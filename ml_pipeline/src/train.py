@@ -2,6 +2,7 @@ import torch
 import torchvision.models as models 
 
 
+
 def build_model(cfg, device):
     model_cfg = cfg["model"]
 

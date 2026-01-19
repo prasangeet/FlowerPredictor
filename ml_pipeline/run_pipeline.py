@@ -1,21 +1,30 @@
 from datetime import datetime
 import json
 import os
-from tqdm import tqdm
-import yaml
 import random
+import yaml
 import numpy as np
 import torch
+from tqdm import tqdm
 
-from src import evaluate, register
 from src.preprocess import get_dataloader
 from src.train import build_model
 from src.evaluate import evaluate
 from src.register import register_model
 
+import mlflow
+from mlflow.models import infer_signature
+
+from src.mlflow_wrapper import TorchImageClassifier
+
+
+# ------------------------
+# Utilities
+# ------------------------
 def load_config():
     with open("ml_pipeline/params.yaml", "r") as f:
-        return yaml.safe_load(f);
+        return yaml.safe_load(f)
+
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -25,94 +34,136 @@ def set_seed(seed: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
+# ------------------------
+# Main pipeline
+# ------------------------
 def main():
     cfg = load_config()
     set_seed(cfg["training"]["seed"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
 
-    # 1. Data
-    train_loader, val_loader, class_to_idx = get_dataloader(cfg)
+    # ---- MLflow setup ----
+    mlflow.set_experiment("flowers_classification")
+    mlflow.end_run()  # safety
 
-    # 2. Model
-    model = build_model(cfg, device)
+    with mlflow.start_run(run_name=cfg["model"]["name"]):
+        # ---- Log config ----
+        mlflow.log_params({
+            "model_name": cfg["model"]["name"],
+            "pretrained": cfg["model"]["pretrained"],
+            "num_classes": cfg["model"]["num_classes"],
+            "learning_rate": cfg["training"]["learning_rate"],
+            "batch_size": cfg["training"]["batch_size"],
+            "epochs": cfg["training"]["epochs"],
+            "optimizer": "Adam",
+            "device": device.type,
+        })
 
-    # 3. Training setup
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(
-        model.fc.parameters(),
-        lr= cfg['training']['learning_rate']
-    )
+        # ---- Data ----
+        train_loader, val_loader, class_to_idx = get_dataloader(cfg)
 
-    train_losses = []
-    train_accuracies = []
+        # ---- Model ----
+        model = build_model(cfg, device)
 
+        criterion = torch.nn.CrossEntropyLoss()
 
-    # 4. Training loop (omitted for brevity)
-    model.train()
-    for epoch in range(cfg["training"]["epochs"]):
-        running_loss = 0.0
-        running_corrects = 0
-        total_samples = 0
-
-        epoch_bar = tqdm(
-            train_loader,
-            desc=f"Epoch {epoch + 1}/{cfg['training']['epochs']}",
-            leave=False
+        optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=cfg["training"]["learning_rate"],
         )
 
+        # ---- Training ----
         model.train()
-        for inputs, labels in epoch_bar:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+        for epoch in range(cfg["training"]["epochs"]):
+            running_loss = 0.0
+            running_corrects = 0
+            total_samples = 0
 
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+            epoch_bar = tqdm(
+                train_loader,
+                desc=f"Epoch {epoch + 1}/{cfg['training']['epochs']}",
+                leave=False,
+            )
 
-            _, preds = torch.max(outputs, 1)
+            for inputs, labels in epoch_bar:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
-            running_loss += loss.item() * inputs.size(0)
-            running_corrects += torch.sum(preds == labels).item()
-            total_samples += inputs.size(0)
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
 
-            epoch_bar.set_postfix(loss=loss.item())
+                _, preds = torch.max(outputs, 1)
 
-        epoch_loss = running_loss / total_samples
-        epoch_acc = running_corrects / total_samples
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == labels).item()
+                total_samples += inputs.size(0)
 
-        train_losses.append(epoch_loss)
-        train_accuracies.append(epoch_acc)
+                epoch_bar.set_postfix(loss=loss.item())
 
-    # 5. Evaluation (omitted for brevity)
-    metrics = evaluate(model, val_loader, criterion, device)
-    
-    os.makedirs(cfg["artifacts"]["output_dir"], exist_ok=True)
+            epoch_loss = running_loss / total_samples
+            epoch_acc = running_corrects / total_samples
 
-    run_metrics = {
-        "train_loss": train_losses[-1],
-        "train_accuracy": train_accuracies[-1],
-        "val_loss": metrics["val_loss"],
-        "val_accuracy": metrics["val_accuracy"]
-    }
+            mlflow.log_metric("train_loss", epoch_loss, step=epoch)
+            mlflow.log_metric("train_accuracy", epoch_acc, step=epoch)
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # ---- Evaluation ----
+        model.eval()
+        metrics = evaluate(model, val_loader, criterion, device)
 
-    metrics_path = os.path.join(
-        cfg["artifacts"]["output_dir"], f"metrics_{run_id}.json"
-    )
+        mlflow.log_metrics({
+            "val_loss": metrics["val_loss"],
+            "val_accuracy": metrics["val_accuracy"],
+        })
 
-    with open(metrics_path, "w") as f:
-        json.dump(run_metrics, f)
+        # ---- Save metrics locally ----
+        os.makedirs(cfg["artifacts"]["output_dir"], exist_ok=True)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        metrics_path = os.path.join(
+            cfg["artifacts"]["output_dir"], f"metrics_{run_id}.json"
+        )
 
-    # 6. Register model (omitted for brevity)
-    model_dir = register_model(model, metrics, cfg, class_to_idx)
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=4)
 
-    print("Pipeline completed")
-    print("Model saved to:", model_dir)
-    print("Metrics:", metrics)
+        mlflow.log_artifact(metrics_path, artifact_path="metrics")
+
+        # ---- MLflow model logging (CORE API) ----
+        example_batch, _ = next(iter(val_loader))
+        example_input = example_batch[:1].to(device)
+
+        with torch.no_grad():
+            example_output = model(example_input)
+
+        signature = infer_signature(
+            example_input.cpu().numpy(),
+            example_output.cpu().numpy()
+        )
+
+        wrapped_model = TorchImageClassifier(model)
+
+        mlflow.pyfunc.log_model(
+            artifact_path='model',
+            python_model=wrapped_model,
+            signature=signature,
+            input_example=example_input.cpu().numpy(),
+        )
+        # ---- Extra artifacts ----
+        mlflow.log_dict(class_to_idx, "class_to_idx.json")
+
+        # ---- Register model (your logic) ----
+        model_dir = register_model(model, metrics, cfg, class_to_idx)
+
+        print("✅ Pipeline completed")
+        print("📦 Model saved to:", model_dir)
+        print("📊 Metrics:", metrics)
+
 
 if __name__ == "__main__":
     main()
+

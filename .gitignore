@@ -46,6 +46,8 @@ node_modules/
 .next/
 out/
 
+# Ml flow
+mlruns
 # TypeScript output
 *.tsbuildinfo
 next-env.d.ts

@@ -1,224 +1,174 @@
-# 🌸 Flower Image Classification Project
+# Flower Image Classification – MLOps Pipeline (GPU + MLflow + Docker)
 
-A full-stack application for classifying flower images using a deep learning model. Built with Django backend (PyTorch model) and Next.js frontend, providing an API for image prediction and a user-friendly web interface.
-
----
-
-## Features
-
-- **AI-Powered Classification**: Trained PyTorch model for flower recognition
-- **REST API**: Django backend with image prediction endpoints
-- **Modern Web Interface**: Next.js frontend with responsive design
-- **Real-Time Predictions**: Instant classification with confidence scores
-- **Easy Integration**: Clean API for external applications
+This repository contains an **end-to-end MLOps-style image classification pipeline** built using **PyTorch**, **Docker**, and **MLflow**, with **GPU acceleration** support.  
+The project trains a CNN (ResNet-based) model on a flower classification dataset and tracks experiments, metrics, and models using MLflow.
 
 ---
 
-## Project Structure
+## 🚀 Features
+
+- 🔥 **GPU-accelerated training** (CUDA + NVIDIA Docker)
+- 🧠 **PyTorch model training** (ResNet backbone)
+- 📦 **Dockerized pipeline**
+- 📊 **MLflow experiment tracking**
+- 🧾 **Model + metrics + artifacts logging**
+- 🧩 **Clean MLOps separation** (training, evaluation, registration)
+- 🧪 Reproducible experiments via configuration files
+
+---
+
+## 🗂️ Project Structure
 
 ```
-flower-classification/
-├── backend/
-│   ├── requirements.txt          # Python dependencies
-│   └── core/
-│       ├── db.sqlite3           # SQLite database
-│       ├── manage.py            # Django management
-│       ├── core/                # Django settings
-│       └── flowerapi/           # API application
-│           ├── best_flower_model.pth    # Trained model
-│           ├── class_mapping.json       # Class mappings
-│           ├── idx_to_class.json        # Index mappings
-│           ├── predict.py               # Prediction logic
-│           ├── training.ipynb           # Training notebook
-│           └── views.py                 # API endpoints
+Image Classification/
 ├── data/
-│   ├── flower_data.zip          # Dataset archive
-│   └── flower_data/
-│       ├── cat_to_name.json     # Category names
-│       ├── train/               # Training images
-│       ├── valid/               # Validation images
-│       └── test_flat/           # Test images
-├── frontend/
-│   ├── package.json             # Node dependencies
-│   ├── app/                     # Next.js pages
-│   ├── components/              # React components
-│   └── public/                  # Static assets
-└── README.md2
+│   └── flower_data/          # Dataset (mounted into container)
+│
+├── ml_pipeline/
+│   ├── params.yaml           # Training & model configuration
+│   ├── run_pipeline.py       # Main training + MLflow pipeline
+│   ├── outputs/              # Metrics JSON outputs
+│   ├── models/               # Saved / registered models
+│   └── src/
+│       ├── preprocess.py     # Dataloader & transforms
+│       ├── train.py          # Model construction
+│       ├── evaluate.py       # Validation logic
+│       ├── register.py       # Model registry logic
+│       └── mlflow_wrapper.py # MLflow PyFunc wrapper
+│
+├── mlruns/                   # MLflow tracking directory (mounted)
+├── Dockerfile
+└── README.md
 ```
 
 ---
 
-## Technology Stack
+## ⚙️ Requirements
 
-**Backend:**
+### Host System
 
-- Django 4.0+ - Web framework and REST API
-- PyTorch 2.0+ - Deep learning model
-- Python 3.8+ - Core language
+- Linux (Fedora recommended)
+- NVIDIA GPU
+- NVIDIA Drivers installed (`nvidia-smi` must work)
+- Docker
+- NVIDIA Container Toolkit
 
-**Frontend:**
+### Python (for MLflow UI)
 
-- Next.js 13+ - React framework
-- Tailwind CSS - Styling
-- JavaScript/React - UI components
+- Python 3.10+
+- `mlflow`
 
 ---
 
-## Setup Instructions
+## 🐳 Docker Setup (GPU Enabled)
 
-### Prerequisites
-
-- Python 3.8+
-- Node.js 16+
-- npm or yarn
-
-### Backend Setup
+### Build the training image
 
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Create and activate virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Setup Django
-cd core
-python manage.py migrate
-python manage.py runserver
+docker build -t flower-ml-pipeline .
 ```
 
-Backend runs at: `http://localhost:8000`
-
-### Frontend Setup
+### Run training with GPU
 
 ```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
+docker run --rm   --gpus all   --shm-size=8g   -v $(pwd)/data/flower_data:/data/flower_data   -v $(pwd)/ml_pipeline/models:/app/ml_pipeline/models   -v $(pwd)/ml_pipeline/outputs:/app/ml_pipeline/outputs   -v $(pwd)/mlruns:/app/mlruns   flower-ml-pipeline
 ```
 
-Frontend runs at: `http://localhost:3000`
-
----
-
-## API Documentation
-
-### Base URL
+You should see in logs:
 
 ```
-http://localhost:8000/api/
-```
-
-### Endpoints
-
-**POST /predict/**
-
-- Upload flower image for classification
-- Request: `multipart/form-data` with `image` field
-- Response:
-
-```json
-{
-  "success": true,
-  "prediction": {
-    "class": "rose",
-    "confidence": 0.95,
-    "class_name": "Rose"
-  }
-}
+cuda
+Epoch 1/...
 ```
 
 ---
 
-## Usage
+## 📊 Viewing MLflow UI
 
-1. Start both backend and frontend servers
-2. Open `http://localhost:3000` in your browser
-3. Upload a flower image to get instant classification results
-4. View prediction confidence and alternative classifications
+MLflow UI runs **outside the training container** and reads the same `mlruns/` directory.
 
----
-
-## Dataset
-
-The `data/flower_data/` directory contains:
-
-- **Training set**: ~6,000 categorized flower images
-- **Validation set**: ~1,000 images for model validation
-- **Test set**: ~1,000 images for evaluation
-- **Categories**: Multiple flower species (Rose, Tulip, Daisy, etc.)
-- **Mappings**: JSON files linking categories to readable names
-
----
-
-## Model Information
-
-- **Architecture**: Fine-tuned ResNet-18
-- **Accuracy**: ~92% on validation set
-- **Input**: 224x224 RGB images
-- **Output**: Softmax probabilities for flower classes
-- **Size**: ~100MB model file
-
----
-
-## Development
-
-### Running Tests
+### Start MLflow UI (recommended)
 
 ```bash
-# Backend tests
-cd backend/core
-python manage.py test
-
-# Frontend tests
-cd frontend
-npm test
+mlflow ui   --backend-store-uri ./mlruns   --host 0.0.0.0   --port 5000
 ```
 
-### API Testing
+Open in browser:
 
-```bash
-curl -X POST -F "image=@flower.jpg" http://localhost:8000/api/predict/
+```
+http://localhost:5000
 ```
 
 ---
 
-## Deployment
+## 🧪 Experiment Tracking
 
-### Production Backend
+Each run logs:
 
-```bash
-pip install gunicorn
-gunicorn core.wsgi:application --bind 0.0.0.0:8000
-```
+- Training loss & accuracy (per epoch)
+- Validation loss & accuracy
+- Model artifacts
+- Class-to-index mapping
+- Configuration parameters
 
-### Production Frontend
+Experiments are created automatically using:
 
-```bash
-npm run build
-npm start
+```python
+mlflow.set_experiment("flowers_classification")
 ```
 
 ---
 
-## License
+## 🧠 Model Logging Strategy
 
-This project is for educational and research purposes.
+- Uses **MLflow PyFunc** (framework-agnostic)
+- Custom wrapper: `TorchImageClassifier`
+- Logs:
+  - Model
+  - Input signature
+  - Input example
+  - Metadata artifacts
+
+This makes the model **portable** for:
+
+- FastAPI inference
+- Batch prediction
+- Future ZenML integration
 
 ---
 
-## Acknowledgements
+## 🧹 Fixing MLflow UI Issues (if needed)
 
-- PyTorch for deep learning framework
-- Django for backend API development
-- Next.js and Tailwind CSS for modern frontend
-- Open source flower datasets for training data
+If MLflow UI shows **“No experiments created”**, clean corrupted folders:
+
+```bash
+rm -rf mlruns/1
+```
+
+Then restart MLflow UI.
+
+---
+
+## 🛣️ Next Extensions
+
+- 🚀 FastAPI inference service
+- 🧠 Top-k predictions + confidence scores
+- 📦 MLflow Model Registry (Staging / Production)
+- 🔁 ZenML pipeline integration
+- ⚡ Mixed precision training (AMP)
+
+---
+
+## 🧑‍💻 Author Notes
+
+This project is designed as a **learning-to-production bridge**:
+
+- Not a toy notebook
+- Not over-engineered
+- Clean, debuggable, extensible
+
+---
+
+## 📜 License
+
+MIT License
